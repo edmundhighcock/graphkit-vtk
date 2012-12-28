@@ -43,7 +43,7 @@ class GraphKit
 		temp_write = false
 		unless filename
 			temp_write = true
-			filename = Time.now.to_i.to_s + ".tmp.vtk"
+			filename = (Time.now.to_i).to_s + rand(10000).to_s + ".tmp.vtk"
 			to_vtk_legacy_fast(file_name: filename)
 		end
 
@@ -81,7 +81,7 @@ class GraphKit
 
 		render_large = vtk_og.large_image_renderer =  vtk.vtkRenderLargeImage
 		render_large.SetInput(vtk_og.renderer)
-		render_large.SetMagnification(8)
+		render_large.SetMagnification(4)
 
 		#vtk_og.interactor =  interactor = vtk.vtkRenderWindowInteractor
 		#interactor.SetRenderWindow(renderer_window)

@@ -34,6 +34,86 @@ class GraphKit
 
 	end
 	
+	# This module contains methods for rendering GraphKits
+	# using the Visualization Toolkit (VTK). It uses the 
+	# Python interface to VTK via the RubyPython bridge
+	# (see rubygems.org/gems/rubypython).
+	#
+	# It should work with vtk and vtk-python installed
+	# on any Linux distro. 
+	#
+	# If you want to use it on a supercomputer you will
+	# almost certainly have to build Python and VTK yourself.
+	#
+	# The instructions below have been tested on Hector but
+	# can be easily adapted to work anywhere. 
+	#
+	# First you need to configure your system to use the GNU
+	# compilers and with dynamic linking enabled. The instructions
+	# for configuring your system for installing CodeRunner should
+	# work well. See the CodeRunner wiki (coderunner.sourceforge.net).
+	#
+	# Choose a directory to install everything: <tt>myprefix</tt>.
+	#
+	# Download the source for Python 2.x (2.7 works as of Dec 2012),
+	# extract it and build it (with shared libraries) as follows.
+	#   $ cd Python-2.7.3
+	#   $ ./configure  --prefix=<myprefix> --enable-shared LDFLAGS="-Wl,-rpath <myprefix/lib"
+	#   $ make && make install
+	#
+	# Download the VTK source (tested with VTK 5.10) and extract it.
+	#
+	# Make a directory at the same level as the VTK source folder, 
+	# e.g. VTK-bin. Make sure CMake is available (e.g. module load CMake).
+	# Configure like this:
+	# 	1. $ cd VTK-bin
+	# 	2. $ ccmake -i ../VTK5.10.1   # (replace with appropriate folder)
+	#
+	# You will now enter the CMake interactive configuration. Press 'c' to 
+	# run the initial configuration. Press 't' to get to the advanced options.
+	# Make sure the settings below are as follows
+	# 	CMAKE_INSTALL_PREFIX <myprefix>
+	# 	VTK_WRAP_PYTHON on
+	#		VTK_USE_RENDERING on
+	# 	VTK_USE_X off
+	#		VTK_OPENGL_HAS_OSMESA on
+	#
+	#	The last two settings mean that VTK won't try to pop up windows when 
+	#	it is rendering: instead it will write them straight to file. 
+	#	OSMESA stands for Off Screen Mesa, where Mesa is the open source
+	#	graphics library. 
+	#
+	#	Press 'c' to update the configuration. 
+	#	Now update the following settings:
+	#		PYTHON_EXECUTABLE <myprefix>/bin/python
+	#		PYTHON_INCLUDE_DIR <myprefix>/include/python2.x
+	#		PYTHON_LIBRARY <myprefix>/lib/libpython2.x.so
+	#		VTK_USE_OFFSCREEN on
+	#		
+	#
+	# Here is the funky bit: we don't want to use the standard hardware-enabled
+	# OpenGL libraries because we want to render offscreen. The standard OpenGL
+	# conflicts with OSMESA and makes SEGFAULTS (yuk). Instead we can have OSMESA
+	# replace all their functionality by setting
+	# 	OPENGL_glu_LIBRARY
+	# 	OPENGL_gl_LIBRARY
+	# to the same value as
+	# 	OSMESA_LIBRARY
+	#
+	# This will of course not be as fast, but that's OK because we are going
+	# to parallelise over the supercomputer when we write our rendering scripts!
+	#
+	# Press 'c' to configure once more, and 'g' to generate the makefiles.
+	# Now build
+	# 	$ make     # This will take about 40 mins.
+	# 	$ make install
+	#
+	# Finally we need to setup python: add these lines to your .bashrc
+	# 	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<myprefix>/lib/vtk-5.10/
+	# 	export PYTHONPATH=$PYTHONPATH:<myprefix>/lib/python2.7/site-packages/
+	# 	export PATH=<myprefix>/bin:$PATH
+	module VTK
+	
 	# This method returns a VTKObjectGroup object, which 
 	# contains references to the VTK/Python objects 
 	# which are necessary to plot the graph. 
@@ -142,6 +222,9 @@ class GraphKit
 
 
 
+	end #module VTK
+
+	include VTK
 
 
 

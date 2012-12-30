@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = "graphkit-vtk"
-  s.version = "0.1.1"
+  s.version = "0.2.1"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Edmund Highcock"]
-  s.date = "2012-12-28"
+  s.date = "2012-12-30"
   s.description = "An extension allowing graphkits to be rendered using the Visualization Toolkit. Uses the RubyPython gem to access the Python bindings for VTK."
   s.email = "edmundhighcock@sourceforge.net"
   s.extra_rdoc_files = [
@@ -33,7 +33,7 @@ Gem::Specification.new do |s|
   s.homepage = "http://github.com/edmundhighcock/graphkit-vtk"
   s.licenses = ["GPLv3"]
   s.require_paths = ["lib"]
-  s.rubygems_version = "1.8.24"
+  s.rubygems_version = "1.8.23"
   s.summary = "An extension allowing graphkits to be rendered using the Visualization Toolkit."
 
   if s.respond_to? :specification_version then

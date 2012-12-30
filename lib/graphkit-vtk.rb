@@ -43,7 +43,7 @@ class GraphKit
 		temp_write = false
 		unless filename
 			temp_write = true
-			filename = (Time.now.to_i).to_s + rand(10000).to_s + ".tmp.vtk"
+			filename = (Time.now.to_i).to_s + rand(1000000).to_s + ".tmp.vtk"
 			to_vtk_legacy_fast(file_name: filename)
 		end
 
@@ -68,12 +68,23 @@ class GraphKit
 		mapper.SetInput(output)
 		mapper.SetScalarRange(scalar_range)
 
+		look_up_table = vtk.vtkLookupTable
+		look_up_table.SetNumberOfColors(64)
+		look_up_table.SetHueRange(0.0, 0.667)
+		mapper.SetLookupTable(look_up_table)
+		mapper.SetScalarModeToDefault
+		#mapper.CreateDefaultLookupTable
+		mapper.ScalarVisibilityOn
+		#mapper.SelectColorArray('myvals')
+
+
 		vtk_og.actor = actor = vtk.vtkActor
 		actor.SetMapper(mapper)
+		actor.VisibilityOn
 
 		vtk_og.renderer = renderer = vtk.vtkRenderer
 		renderer.AddActor(actor)
-		renderer.SetBackground(0,0,0)
+		#renderer.SetBackground(0,0,0)
 
 		vtk_og.renderer_window = renderer_window = vtk.vtkRenderWindow
 		renderer_window.SetSize(640,480)
@@ -83,9 +94,9 @@ class GraphKit
 		render_large.SetInput(vtk_og.renderer)
 		render_large.SetMagnification(4)
 
-		#vtk_og.interactor =  interactor = vtk.vtkRenderWindowInteractor
-		#interactor.SetRenderWindow(renderer_window)
-		#interactor.Initialize
+		vtk_og.interactor =  interactor = vtk.vtkRenderWindowInteractor
+		interactor.SetRenderWindow(renderer_window)
+		interactor.Initialize
 		#interactor.Start
 
 		return vtk_og

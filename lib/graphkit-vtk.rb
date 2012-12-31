@@ -1,5 +1,9 @@
 class GraphKit
 	class VTKObjectGroup
+
+		def initialize
+			@other_objects = {}
+		end
 		#The Python vtk module
 		attr_accessor :vtk_module
 		
@@ -12,9 +16,14 @@ class GraphKit
 		# The VTK mapper (which converts the data to image data)
 		attr_accessor :mapper
 
-		# The VTK actor which is responsible for the data 
+		# The vtkActor which is responsible for the data 
 		# within the window
 		attr_accessor :actor
+		
+		# The vtkVolume which is responsible for the data 
+		# within the window in the case of volume
+		# rendering
+		attr_accessor :volume
 
 		# The VTK renderer which renders the image data
 		attr_accessor :renderer
@@ -30,6 +39,9 @@ class GraphKit
 
 		# The VTK interactor
 		attr_accessor :interactor
+
+		# A hash containing other VTK objects
+		attr_reader :other_objects
 		
 
 	end
@@ -220,6 +232,160 @@ class GraphKit
 	end
 
 
+	# This method returns a VTKObjectGroup object, which 
+	# contains references to the VTK/Python objects 
+	# which are necessary to plot a graph using 
+	# volume rendering. 
+	#
+	# function can be :raycast or :tetrahedra
+	#
+	def vtk_volume_object_group( function = :raycast, filename = nil)
+		# If we are not given a filename, need to write the
+		# data in VTK format... can change at some point? 
+		temp_write = false
+		unless filename
+			temp_write = true
+			filename = (Time.now.to_i).to_s + rand(1000000).to_s + ".tmp.vtk"
+			to_vtk_legacy_fast(file_name: filename)
+		end
+
+		require 'rubypython'
+		RubyPython.start
+		vtk_og = VTKObjectGroup.new
+		vtk  = vtk_og.vtk_module = RubyPython.import('vtk')
+		file_name = filename
+
+		vtk_og.reader = reader = vtk.vtkUnstructuredGridReader
+		reader.SetFileName(file_name)
+		reader.Update
+
+		if temp_write
+			FileUtils.rm(filename)
+		end
+
+		vtk_og.output = output = reader.GetOutput
+		ep 'scalar_range', scalar_range = output.GetScalarRange
+		#
+		
+		tf = vtk_og.other_objects[:tetrahedra_filter] = vtk.vtkDataSetTriangleFilter
+		tf.SetInput(output)
+		
+
+		volprop = vtk_og.other_objects[:volume_property]= vtk.vtkVolumeProperty
+		coltranfunc = vtk_og.other_objects[:color_transfer_function] = vtk.vtkColorTransferFunction
+		opacfunc = vtk_og.other_objects[:opacity_function] = vtk.vtkPiecewiseFunction
+
+		min, max = scalar_range.to_a
+		ep scalar_range.to_a
+		max = max.to_s.to_f
+		min = min.to_s.to_f
+		ep 'max', max, max.class, 'min', min, min.class
+
+		coltranfunc.AddRGBPoint(min, 0.0, 0.0, 1.0)
+		coltranfunc.AddRGBPoint(min + 1.0*(max-min)/5.0, 0.0, 1.0, 1.0)
+		coltranfunc.AddRGBPoint(min + 2.0*(max-min)/5.0, 1.0, 0.0, 0.0)
+		coltranfunc.AddRGBPoint(min + 3.0*(max-min)/5.0, 1.0, 1.0, 0.0)
+		coltranfunc.AddRGBPoint(min + 4.0*(max-min)/5.0, 0.0, 1.0, 0.0)
+		coltranfunc.AddRGBPoint(min + 5.0*(max-min)/5.0, 1.0, 1.0, 1.0)
+
+		opacfunc.AddPoint(min, 1)
+		opacfunc.AddPoint(max, 1)
+
+		volprop.SetColor(coltranfunc)
+		volprop.SetScalarOpacity(opacfunc)
+
+
+		case function
+		when :raycast
+			vtk_og.mapper = mapper = vtk.vtkUnstructuredGridVolumeRayCastMapper
+			mapper.SetInput(tf.GetOutput)
+			mapper.SetRayCastFunction(vtk.vtkUnstructuredGridBunykRayCastFunction)
+		when :zsweep
+			vtk_og.mapper = mapper = vtk.vtkUnstructuredGridVolumeZSweepMapper
+			mapper.SetInput(tf.GetOutput)
+			mapper.SetRayIntegrator(vtk.vtkUnstructuredGridHomogeneousRayIntegrator )
+		when :tetrahedra
+			vtk_og.mapper = mapper = vtk.vtkProjectedTetrahedraMapper
+			mapper.SetInput(tf.GetOutput)
+			#mapper.SetRayCastFunction(vtk.vtkUnstructuredGridBunykRayCastFunction)
+		end
+		#mapper.SetScalarRange(scalar_range)
+
+		#look_up_table = vtk.vtkLookupTable
+		#look_up_table.SetNumberOfColors(64)
+		#look_up_table.SetHueRange(0.0, 0.667)
+		#mapper.SetLookupTable(look_up_table)
+		mapper.SetScalarModeToDefault
+		#mapper.CreateDefaultLookupTable
+		#mapper.ScalarVisibilityOn
+		#mapper.SelectColorArray('myvals')
+
+
+		vtk_og.volume = volume = vtk.vtkVolume
+		volume.SetMapper(mapper)
+		volume.SetProperty(volprop)
+		volume.VisibilityOn
+
+		vtk_og.renderer = renderer = vtk.vtkRenderer
+		renderer.AddVolume(volume)
+		#renderer.SetBackground(0,0,0)
+
+		vtk_og.renderer_window = renderer_window = vtk.vtkRenderWindow
+		renderer_window.SetSize(640,480)
+		renderer_window.AddRenderer(renderer)
+
+		render_large = vtk_og.large_image_renderer =  vtk.vtkRenderLargeImage
+		render_large.SetInput(vtk_og.renderer)
+		render_large.SetMagnification(4)
+
+		vtk_og.interactor =  interactor = vtk.vtkRenderWindowInteractor
+		interactor.SetRenderWindow(renderer_window)
+		interactor.Initialize
+		#interactor.Start
+
+		return vtk_og
+	end
+
+	# Visualise the GraphKit using the Visualization Toolkit (VTK)
+	# volume rendering classes. 
+	# If <tt>output_file</tt> is "window", display it in a window;
+	# otherwise, write to the file, e.g. my_graph.jpg, my_graph.gif.
+	# The 'window' option will not work where VTK has been compiled
+	# for off screen rendering only. 
+	#
+	# If input_file is given it sould be a VTK data file. Otherwise
+	# it will write the data to a temporary VTK legacy data file.
+	#
+	# The optional block yields a VTKObjectGroup which contains references 
+	# to all the VTK objects for arbitrary manipulation before
+	# rendering.
+	
+	def vtk_render_volume(output_file='window', function = :raycast, input_file=nil, &block)
+		vtk_og = vtk_volume_object_group(function, filename)
+		yield(vtk_og) if block
+		vtk = vtk_og.vtk_module
+		#filter = vtk.vtkWindowToImageFilter 
+		#vtk_og.renderer_window.SetOffScreenRendering(1)
+		#gf = vtk.vtkGraphicsFactory
+		#gf.SetOffScreenOnlyMode(1)
+		vtk_og.renderer_window.Start
+		#vtk_og.reader.Update
+		#vtk_og.renderer.Update
+		#filter.SetInput(vtk_og.renderer_window)
+		case File.extname(output_file)
+		when '.jpeg', '.jpg'
+			jpeg_writer = vtk.vtkJPEGWriter
+			#vtk_og.renderer.DeviceRender
+			#jpeg_writer.SetInput(vtk_og.renderer.GetOutput)
+			#jpeg_writer.SetInput(render_large.GetOutput)
+			jpeg_writer.SetInput(vtk_og.large_image_renderer.GetOutput)
+			#filter.Update
+			jpeg_writer.SetFileName(output_file)
+			jpeg_writer.Write
+		end
+		vtk_og.renderer_window.Finalize
+
+	end
 
 
 	end #module VTK

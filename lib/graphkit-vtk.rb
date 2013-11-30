@@ -1,3 +1,5 @@
+require 'rubypython'
+
 class GraphKit
 	class VTKObjectGroup
 
@@ -42,6 +44,18 @@ class GraphKit
 
 		# A hash containing other VTK objects
 		attr_reader :other_objects
+
+		def delete
+			#([@reader, @mapper, @actor, @volume, @renderer, @renderer_window, @large_image_renderer, @interactor] + other_objects.values).each do |obj|
+				#next unless obj
+				#begin
+					#obj.Delete
+				#rescue NoMethodError => err
+					#puts err, obj
+					#next
+				#end
+			#end
+		end
 		
 
 	end
@@ -135,12 +149,10 @@ class GraphKit
 		temp_write = false
 		unless filename
 			temp_write = true
-			filename = (Time.now.to_i).to_s + rand(1000000).to_s + ".tmp.vtk"
+			filename = (Time.now.to_i).to_s +  $$.to_s + rand(1000000).to_s + ".tmp.vtk"
 			to_vtk_legacy_fast(file_name: filename)
 		end
 
-		require 'rubypython'
-		RubyPython.start
 		vtk_og = VTKObjectGroup.new
 		vtk  = vtk_og.vtk_module = RubyPython.import('vtk')
 		file_name = filename
@@ -205,29 +217,32 @@ class GraphKit
 	# rendering.
 	
 	def vtk_render(output_file='window', input_file=nil, &block)
+		#RubyPython.start
 		vtk_og = vtk_object_group(filename)
 		yield(vtk_og) if block
-		vtk = vtk_og.vtk_module
-		#filter = vtk.vtkWindowToImageFilter 
-		#vtk_og.renderer_window.SetOffScreenRendering(1)
-		#gf = vtk.vtkGraphicsFactory
-		#gf.SetOffScreenOnlyMode(1)
-		vtk_og.renderer_window.Start
-		#vtk_og.reader.Update
-		#vtk_og.renderer.Update
-		#filter.SetInput(vtk_og.renderer_window)
-		case File.extname(output_file)
-		when '.jpeg', '.jpg'
-			jpeg_writer = vtk.vtkJPEGWriter
-			#vtk_og.renderer.DeviceRender
-			#jpeg_writer.SetInput(vtk_og.renderer.GetOutput)
-			#jpeg_writer.SetInput(render_large.GetOutput)
-			jpeg_writer.SetInput(vtk_og.large_image_renderer.GetOutput)
-			#filter.Update
-			jpeg_writer.SetFileName(output_file)
-			jpeg_writer.Write
-		end
-		vtk_og.renderer_window.Finalize
+		write_file(output_file, vtk_og)
+		#vtk = vtk_og.vtk_module
+		##filter = vtk.vtkWindowToImageFilter 
+		##vtk_og.renderer_window.SetOffScreenRendering(1)
+		##gf = vtk.vtkGraphicsFactory
+		##gf.SetOffScreenOnlyMode(1)
+		#vtk_og.renderer_window.Start
+		##vtk_og.reader.Update
+		##vtk_og.renderer.Update
+		##filter.SetInput(vtk_og.renderer_window)
+		###########case File.extname(output_file)
+		###########when '.jpeg', '.jpg'
+			###########jpeg_writer = vtk.vtkJPEGWriter
+			############vtk_og.renderer.DeviceRender
+			############jpeg_writer.SetInput(vtk_og.renderer.GetOutput)
+			############jpeg_writer.SetInput(render_large.GetOutput)
+			###########jpeg_writer.SetInput(vtk_og.large_image_renderer.GetOutput)
+			############filter.Update
+			###########jpeg_writer.SetFileName(output_file)
+			###########jpeg_writer.Write
+		###########end
+		#vtk_og.renderer_window.Finalize
+		#RubyPython.stop
 
 	end
 
@@ -239,18 +254,18 @@ class GraphKit
 	#
 	# function can be :raycast or :tetrahedra
 	#
-	def vtk_volume_object_group( function = :raycast, filename = nil)
+	def vtk_volume_object_group( function = :raycast, filename = nil, options={})
 		# If we are not given a filename, need to write the
 		# data in VTK format... can change at some point? 
 		temp_write = false
 		unless filename
 			temp_write = true
-			filename = (Time.now.to_i).to_s + rand(1000000).to_s + ".tmp.vtk"
+			filename = (Time.now.to_i).to_s + $$.to_s + rand(1000000).to_s + ".tmp.vtk"
 			to_vtk_legacy_fast(file_name: filename)
 		end
 
-		require 'rubypython'
-		RubyPython.start
+		#require 'rubypython'
+		#RubyPython.start
 		vtk_og = VTKObjectGroup.new
 		vtk  = vtk_og.vtk_module = RubyPython.import('vtk')
 		file_name = filename
@@ -279,6 +294,11 @@ class GraphKit
 		ep scalar_range.to_a
 		max = max.to_s.to_f
 		min = min.to_s.to_f
+		range = (max-min)
+		if options[:cut_range_factor]
+		min = min + range/2.0*options[:cut_range_factor]
+		max = max - range/2.0*options[:cut_range_factor] 
+		end
 		ep 'max', max, max.class, 'min', min, min.class
 
 		coltranfunc.AddRGBPoint(min, 0.0, 0.0, 1.0)
@@ -297,6 +317,7 @@ class GraphKit
 
 		case function
 		when :raycast
+			ep "RAYCAST"
 			vtk_og.mapper = mapper = vtk.vtkUnstructuredGridVolumeRayCastMapper
 			mapper.SetInput(tf.GetOutput)
 			mapper.SetRayCastFunction(vtk.vtkUnstructuredGridBunykRayCastFunction)
@@ -359,10 +380,17 @@ class GraphKit
 	# The optional block yields a VTKObjectGroup which contains references 
 	# to all the VTK objects for arbitrary manipulation before
 	# rendering.
-	
+ 
+#puts 'LOADING'	
 	def vtk_render_volume(output_file='window', function = :raycast, input_file=nil, &block)
+		puts 'HERE'
 		vtk_og = vtk_volume_object_group(function, filename)
 		yield(vtk_og) if block
+		write_file(output_file, vtk_og)
+		#vtk_og.delete
+	end
+
+	def write_file(output_file, vtk_og)
 		vtk = vtk_og.vtk_module
 		#filter = vtk.vtkWindowToImageFilter 
 		#vtk_og.renderer_window.SetOffScreenRendering(1)
@@ -382,9 +410,20 @@ class GraphKit
 			#filter.Update
 			jpeg_writer.SetFileName(output_file)
 			jpeg_writer.Write
+		when '.gif'
+			gif_writer = vtk.vtkGIFWriter
+			gif_writer.SetInput(vtk_og.large_image_renderer.GetOutput)
+			gif_writer.SetFileName(output_file)
+			gif_writer.Write
+		when '.tiff'
+			tiff_writer = vtk.vtkTIFFWriter
+			tiff_writer.SetInput(vtk_og.large_image_renderer.GetOutput)
+			tiff_writer.SetFileName(output_file)
+			tiff_writer.Write
+		else
+			raise 'Cannot write files of this type: ' + output_file
 		end
 		vtk_og.renderer_window.Finalize
-
 	end
 
 
